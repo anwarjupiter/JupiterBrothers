@@ -1,10 +1,11 @@
-import os
+import pandas as pd
 from tqdm import tqdm
 from langchain_community.vectorstores import FAISS
 from langchain_ibm import ChatWatsonx
 from langchain_ibm import WatsonxEmbeddings
 from constants import *
 from langchain_community.document_loaders.csv_loader import CSVLoader
+from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain.prompts import PromptTemplate
 from langchain.chains import RetrievalQA
 
@@ -24,8 +25,14 @@ def create_retriever(csv_file="input/civil.csv"):
     vector_db = "store/civil"
 
     print("--- Step 1 --- Loading Documents")
-    loader = CSVLoader(file_path=csv_file)
-    documents = loader.load()
+    df = pd.read_csv(csv_file)
+
+    docs = "\n".join(df.astype(str).apply(lambda row: ", ".join(row), axis=1)) 
+    text_splitter = RecursiveCharacterTextSplitter(chunk_size=2000, chunk_overlap=0)
+    texts = text_splitter.split_text(docs)
+
+    print(len(texts))
+    print(texts[0])
 
     embeddings = WatsonxEmbeddings(
         model_id=IBM_SLATE_125M_ENGLISH_RTRVR,
@@ -39,9 +46,9 @@ def create_retriever(csv_file="input/civil.csv"):
         vectorstore = FAISS.load_local(vector_db,embeddings,allow_dangerous_deserialization=True)
     else:
         print("--- Step 2 --- Generating Embddings for Rows")
-        vectorstore = FAISS.from_documents([documents[0]],embedding=embeddings)
-        for doc in tqdm(documents[1:],desc="Generating Embeddings",unit="Doc"):
-            vectorstore.add_documents([doc])
+        vectorstore = FAISS.from_texts([texts[0]],embedding=embeddings)
+        for doc in tqdm(texts[1:],desc="Generating Embeddings",unit="Doc"):
+            vectorstore.add_texts([doc])
         vectorstore.save_local(vector_db)
         print(f"Vectorstore saved at: {vector_db}")
     return vectorstore.as_retriever()
@@ -113,7 +120,7 @@ def run(query,csv_file=""):
         retriever=retriever,
         chain_type="stuff",  # Most common choice
         chain_type_kwargs={"prompt": prompt2},
-        verbose=True
+        # verbose=True
     )
     
     response = qa_chain.invoke(query)

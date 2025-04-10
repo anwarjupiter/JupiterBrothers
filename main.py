@@ -108,7 +108,8 @@ async def pdf_to_table(pdf_file:UploadFile = File(...)):
         )
     except Exception as e:
         return JSONResponse(status_code=500, content={"error": str(e)})
-    
+
+# working for asking question with csv
 @app.post("/ask-to-civil")
 @limiter.limit("5/minute")
 async def ask_to_civil(request: Request, question: str = Form(...)):
